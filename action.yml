@@ -1,0 +1,30 @@
+name: 'Terraform CI'
+description: 'Validate and runs a terraform plan'
+inputs:
+  terraform_version:
+    description: 'Terraform version to use'
+    required: false
+    default: '0.14.x'
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        terraform_wrapper: true
+    - name: terraform init
+      shell: bash
+      run: |
+        terraform init -input=false \
+          -backend-config=container_name=$TERRAFORM_BACKEND_TFSTATE_CONTAINER_NAME \
+          -backend-config=key=$TERRAFORM_BACKEND_TFSTATE_NAME \
+          -backend-config=storage_account_name=$TERRAFORM_BACKEND_TFSTATE_STA_NAME \
+          -backend-config=resource_group_name=$TERRAFORM_BACKEND_TFSTATE_RG_NAME
+    - uses: actions/download-artifact@v2
+      with:
+        name: "PR-${{ github.event.number }}-tfplan"
+        path: tfplan
+    - name: terraform apply
+      shell: bash
+      run: |
+        terraform apply -input=false -auto-approve tfplan
