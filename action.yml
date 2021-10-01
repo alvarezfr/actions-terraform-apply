@@ -40,14 +40,17 @@ runs:
           -backend-config=key=$TERRAFORM_BACKEND_TFSTATE_NAME \
           -backend-config=storage_account_name=$TERRAFORM_BACKEND_TFSTATE_STA_NAME \
           -backend-config=resource_group_name=$TERRAFORM_BACKEND_TFSTATE_RG_NAME
-    - name: recover tfplan from cache (if exist from PR)
-      id: cache
-      uses: actions/cache@v2
+    - name: Download tfplan
+      uses: dawidd6/action-download-artifact@v2
       with:
-        path: tfplan
-        key: "tfplan-${{ steps.repo-hash.outputs.hash }}"
+        workflow: terraform.yml
+        workflow_conclusion: success
+        event: pull_request
+        name: tfplan-${{ steps.repo-hash.outputs.hash }}
+        path: .
+        repo: ${{github.repository}}
     - name: terraform apply
       shell: bash
       run: |
-        echo "${{ steps.cache.outputs.cache-hit }}"
+        ls -lh
         # terraform apply -input=false -auto-approve tfplan
