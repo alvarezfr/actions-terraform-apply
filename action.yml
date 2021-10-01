@@ -1,18 +1,38 @@
-name: 'Terraform CI'
-description: 'Validate and runs a terraform plan'
+name: 'Terraform CD'
+description: 'Applies a tfplan stored on cache or without tfplan'
 inputs:
   terraform_version:
     description: 'Terraform version to use'
-    required: false
+    required: False
     default: '0.14.x'
+  # Currently is not allowed to use conditional inside composite actions. https://github.com/actions/runner/issues/834
+  # write_plan_as_comment:
+  #   description: 'enable to write the tfplan to the pr comment'
+  #   required: false
+  #   default: true
 runs:
   using: composite
   steps:
+    # to calculate the hash of the files without the current dirty workspace
+    - name: checkout original repo
+      uses: actions/checkout@v2
+      with:
+        path: .original_repo
+    # Just to discard possible differences if the commit sha is not the same between
+    - name: clean up .git from original repo
+      shell: bash
+      run: rm -rf .original_repo/.git
+    - name: get original repo hash
+      id: repo-hash
+      shell: bash
+      run: echo "::set-output name=hash::${{ hashFiles('.original_repo/*') }}"
     - uses: hashicorp/setup-terraform@v1
       with:
         terraform_version: ${{ inputs.terraform_version }}
         terraform_wrapper: true
     - name: terraform init
+      env:
+        TF_IN_AUTOMATION: 1
       shell: bash
       run: |
         terraform init -input=false \
@@ -20,11 +40,14 @@ runs:
           -backend-config=key=$TERRAFORM_BACKEND_TFSTATE_NAME \
           -backend-config=storage_account_name=$TERRAFORM_BACKEND_TFSTATE_STA_NAME \
           -backend-config=resource_group_name=$TERRAFORM_BACKEND_TFSTATE_RG_NAME
-    - uses: actions/download-artifact@v2
+    - name: recover tfplan from cache (if exist from PR)
+      id: cache
+      uses: actions/cache@v2
       with:
-        name: "PR-${{ github.event.number }}-tfplan"
         path: tfplan
+        key: "tfplan-${{ steps.repo-hash.outputs.hash }}"
     - name: terraform apply
       shell: bash
       run: |
-        terraform apply -input=false -auto-approve tfplan
+        echo "${{ steps.cache.outputs.cache-hit }}"
+        # terraform apply -input=false -auto-approve tfplan
